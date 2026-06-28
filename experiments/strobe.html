@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>strobe — 3 screen</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{
+    width:100%;height:100%;
+    overflow:hidden;
+    background:#000;
+    font-family:Arial,sans-serif;
+  }
+  /* full 5760x1080 wall, split into three 1920-wide screens */
+  #stage{
+    position:fixed;inset:0;
+    display:flex;
+    background:#000;
+    cursor:pointer;
+  }
+  .cell{
+    position:relative;
+    flex:1 1 0;
+    min-width:0;
+    height:100%;
+    display:flex;align-items:center;justify-content:center;
+    background:#000;
+    overflow:hidden;
+    transition:background 20ms steps(1);
+  }
+  .cell.inv{background:#fff;}
+  /* faint seam so you can line the bezels up while recording (toggle with B) */
+  #stage.seams .cell + .cell{box-shadow:inset 1px 0 0 #222;}
+  .word{
+    font-family:Arial,sans-serif;
+    font-weight:900;
+    font-stretch:condensed;
+    text-transform:lowercase;
+    letter-spacing:-.04em;
+    line-height:1;
+    color:#fff;
+    text-align:center;
+    padding:0 40px;
+    white-space:nowrap;
+    will-change:transform;
+    user-select:none;
+    filter:blur(1px);
+  }
+  .cell.inv .word{color:#000;}
+  #hint{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    font-size:14px;letter-spacing:.12em;text-transform:uppercase;
+    color:#444;pointer-events:none;
+    transition:opacity 1s;
+    z-index:10;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="cell"><div class="word">—</div></div>
+  <div class="cell"><div class="word">—</div></div>
+  <div class="cell"><div class="word">—</div></div>
+</div>
+<div id="hint">click to start · space to pause · ↑↓ speed · F fullscreen · B seams</div>
+
+<script>
+const phrases = [
+  "i refuse to be defined",
+  "id rather be a transparent iridescent creature floating over your mind than a finite person",
+  "its called range babe you wouldnt get it",
+  "im gods favorite bimbo angel catholic tumblr red scare heart emoji bpd tradwife",
+  "mirror stage final boss and btw everyone loves me",
+  "scholars",
+  "kings",
+  "priests",
+  "influencers",
+  "gurus",
+  "deep thinkers",
+  "micro bloggers",
+  "justin bieber",
+  "they just wont admit it",
+  "i make them laugh",
+  "i make them cry",
+  "im wearing 8 past lives and i smell like jasmine",
+  "you cant miss me",
+  "my aura is beyond your comprehension"
+];
+
+function tokenize(text){
+  return text.split(/\s+/).filter(w=>w.replace(/[^a-z0-9]/gi,'').length>0);
+}
+
+function displayWord(token){
+  return token.replace(/[.!?,;:]+$/,'');
+}
+
+// the phrase that should be preceded by a black empty-screen break
+const BREAK_BEFORE = "its called range babe you wouldnt get it";
+
+const MID = 1;          // word-by-word plays on the middle screen only
+
+// build the running order WORD BY WORD. a {brk:true} item is a black pause.
+const items = [];
+for(const p of phrases){
+  if(p === BREAK_BEFORE) items.push({brk:true});
+  for(const w of tokenize(p).map(displayWord)){
+    items.push({word:w});
+  }
+}
+
+// every distinct word that can land on screen (for uniform sizing)
+const words = items.filter(i=>i.word).map(i=>i.word);
+
+const stage = document.getElementById('stage');
+const hint  = document.getElementById('hint');
+const cells = [...document.querySelectorAll('.cell')];
+const wordEls = cells.map(c => c.querySelector('.word'));
+
+let wpm = 260;
+let running = false;
+let idx = 0;            // which word we're on
+let trioTimer = null;   // schedules the swap to the next word
+let strobeTimer = null; // the flicker within one word
+let hintTimer = null;
+let uniformSize = 200;  // every word uses this exact size
+
+const STROBE_MS = 180;  // how fast the black↔white flicker runs
+const BREAK_MS  = 1200; // how long the empty black break holds
+
+// how long a word stays up before swapping — scaled by its length
+function durationForWord(word){
+  const base = 60000 / wpm;
+  const lenFactor = Math.min(1.8, 0.55 + word.length * 0.09);
+  return Math.round(base * lenFactor);
+}
+
+// one global font size that lets the single widest word fit any screen -------
+const measure = document.createElement('div');
+measure.className = 'word';
+measure.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;padding:0;';
+document.body.appendChild(measure);
+
+function computeUniformSize(){
+  const ref = 300;
+  measure.style.fontSize = ref + 'px';
+  let maxW = 1;
+  for(const t of new Set(words.map(displayWord))){
+    measure.textContent = t;
+    if(measure.scrollWidth > maxW) maxW = measure.scrollWidth;
+  }
+  const cellW = cells[0].clientWidth - 80;      // minus the 40px side padding
+  const maxH  = window.innerHeight * 0.82;
+  const byWidth  = ref * cellW / maxW;
+  uniformSize = Math.max(12, Math.floor(Math.min(byWidth, maxH)));
+  for(const el of wordEls) el.style.fontSize = uniformSize + 'px';
+}
+
+function setInv(on){
+  for(const c of cells) c.classList.toggle('inv', on);   // all three backgrounds flip together
+}
+
+function jitter(el){
+  const tx=(Math.random()*4-2).toFixed(2);
+  const ty=(Math.random()*3-1.5).toFixed(2);
+  const rot=(Math.random()*0.6-.3).toFixed(2);
+  const sc=(0.99+Math.random()*.02).toFixed(3);
+  el.style.transform=`translate(${tx}px,${ty}px) rotate(${rot}deg) scale(${sc})`;
+}
+
+function clearStrobe(){
+  if(strobeTimer){ clearInterval(strobeTimer); strobeTimer = null; }
+}
+
+function showBlack(){
+  for(const el of wordEls){ el.textContent=''; el.style.transform='none'; }
+  for(const c of cells) c.classList.remove('inv');
+}
+
+// show one word on the middle screen, flicker it black↔white for the hold,
+// then advance to the next word. side screens stay black.
+function tick(){
+  const it = items[idx % items.length];
+  idx++;
+
+  clearStrobe();
+
+  if(it.brk){
+    showBlack();
+    if(running) trioTimer = setTimeout(tick, BREAK_MS);
+    return;
+  }
+
+  wordEls[0].textContent = '';
+  wordEls[2].textContent = '';
+  wordEls[MID].textContent = it.word;
+
+  // start on black-on-white, then strobe the middle screen
+  let on = true;
+  setInv(true);
+  jitter(wordEls[MID]);
+  strobeTimer = setInterval(()=>{
+    on = !on;
+    setInv(on);
+    jitter(wordEls[MID]);
+  }, STROBE_MS);
+
+  if(running) trioTimer = setTimeout(tick, durationForWord(it.word));
+}
+
+function start(){
+  if(trioTimer) clearTimeout(trioTimer);
+  clearStrobe();
+  running = true;
+  tick();
+  hideHint();
+}
+function stop(){
+  clearTimeout(trioTimer);
+  trioTimer = null;
+  clearStrobe();
+  running = false;
+}
+
+function hideHint(){ hint.style.opacity='0'; clearTimeout(hintTimer); }
+function showHint(){
+  hint.style.opacity='1';
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(hideHint, 2000);
+}
+
+stage.addEventListener('click', ()=>{
+  if(!running){ start(); }
+  else { stop(); showHint(); }
+});
+
+document.addEventListener('keydown', e=>{
+  if(e.code==='Space'){
+    e.preventDefault();
+    if(running){ stop(); showHint(); } else { start(); }
+  } else if(e.code==='ArrowUp'){
+    e.preventDefault(); wpm=Math.min(600,wpm+20); showHint();
+  } else if(e.code==='ArrowDown'){
+    e.preventDefault(); wpm=Math.max(120,wpm-20); showHint();
+  } else if(e.key==='f' || e.key==='F'){
+    if(!document.fullscreenElement){ document.documentElement.requestFullscreen?.(); }
+    else { document.exitFullscreen?.(); }
+  } else if(e.key==='b' || e.key==='B'){
+    stage.classList.toggle('seams');
+  }
+});
+
+window.addEventListener('resize', ()=>{ computeUniformSize(); });
+
+// initial state: lock the size, show the first word at rest on the middle screen
+computeUniformSize();
+const first = items.find(i=>i.word);
+wordEls[MID].textContent = first.word;
+</script>
+</body>
+</html>

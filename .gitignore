@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Raw source files (2 GB of videos/stills) — not part of the deployed web app
+/WORK/
+
+# NOTE: data/artworks.json and public/uploads/* ARE committed for now so the
+# preview deploy shows the current work. They move to Supabase for the real
+# launch (Vercel's filesystem is read-only, so uploads there won't persist).
+# .env.local stays out via the .env* rule above.

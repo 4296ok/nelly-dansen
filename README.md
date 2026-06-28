@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Artist Portfolio
 
-## Getting Started
+A simple, image-first portfolio site with a private admin area where the artist
+can upload and manage her own work — no coding required to add pieces.
 
-First, run the development server:
+- **Public site** — gallery (`/`), individual artwork pages, and an `/about` page.
+- **Admin** — password-protected `/admin` page to upload, preview, and delete work.
+- **Stack** — Next.js (App Router) + TypeScript + Tailwind CSS.
+
+Everything is **free**: develop locally for nothing, and host for free on Vercel +
+Supabase when you go live.
+
+---
+
+## Run it locally
 
 ```bash
+npm install      # first time only
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>. The admin area is at <http://localhost:3000/admin>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Admin password:** set in `.env.local` (defaults to `changeme`):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+ADMIN_PASSWORD=pick-a-good-password
+```
 
-## Learn More
+### Personalise the site
 
-To learn more about Next.js, take a look at the following resources:
+Edit `lib/site.ts` — your name, tagline, About text, email, and social links all
+live there. Just change the text between the quotes.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## How it stores work (local)
 
-## Deploy on Vercel
+While developing on your computer:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Uploaded images are saved to `public/uploads/`
+- Titles/descriptions are saved to `data/artworks.json`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Both are git-ignored, so your test uploads won't be committed.
+
+---
+
+## Going live (free) — Supabase + Vercel
+
+The local file-based storage above works great on your machine, but Vercel's
+servers have a **read-only** filesystem, so for the live site you store images and
+data in **Supabase** (free tier: a real database + 1 GB image storage + login).
+
+The whole app only touches storage through `lib/store.ts` and `lib/auth.ts`, so
+this swap stays contained to those two files.
+
+### 1. Create free accounts
+- **Supabase** — <https://supabase.com> → New project (free tier).
+- **Vercel** — <https://vercel.com> → sign in with GitHub.
+
+### 2. In Supabase
+- Create a **Storage bucket** called `artworks` and mark it **public**.
+- Create a **table** `artworks` with columns matching `lib/types.ts`
+  (`id`, `title`, `description`, `medium`, `year`, `image`, `order`, `created_at`).
+- Copy your **Project URL** and **anon/service keys** from Project Settings → API.
+
+### 3. Wire it up
+- `npm install @supabase/supabase-js`
+- Replace the function bodies in `lib/store.ts` to read/write the Supabase table
+  and upload files to the `artworks` bucket (returning the public URL as `image`).
+- Add the Supabase keys as **Environment Variables** in Vercel.
+
+### 4. Deploy
+- Push this folder to a GitHub repo.
+- In Vercel: **New Project → import the repo → Deploy.**
+- Add `ADMIN_PASSWORD` and the Supabase env vars in Vercel's project settings.
+
+That's it — the live site updates instantly whenever she adds a piece from `/admin`.
+
+> Tip: when you're ready for the Supabase swap, just ask Claude Code to
+> "switch the store to Supabase" and it can do the `lib/store.ts` changes for you.

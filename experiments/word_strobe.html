@@ -1,0 +1,307 @@
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Narrow:wght@500;700&family=Bebas+Neue&family=Oswald:wght@500;700&family=Barlow+Condensed:wght@700;800;900&family=Fjalla+One&family=Six+Caps&family=Teko:wght@600;700&family=Saira+Condensed:wght@700;900&display=swap" rel="stylesheet">
+
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  #root{
+    width:100%;height:500px;
+    background:#000;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    position:relative;
+    border-radius:var(--border-radius-lg);
+    overflow:hidden;
+    cursor:pointer;
+    user-select:none;
+  }
+  #root.inv{background:#fff;}
+  #root.brat{background:#8ace00;}
+  #root.brat #word{color:#000;font-family:"Arial Narrow",Arial,sans-serif !important;font-stretch:condensed;}
+  #word{
+    font-family:"Arial Narrow",Arial,sans-serif;
+    font-weight:900;
+    font-size:96px;
+    text-transform:lowercase;
+    letter-spacing:-.04em;
+    line-height:1;
+    color:#fff;
+    text-align:center;
+    padding:0 24px;
+    word-break:break-word;
+    transition:none;
+    will-change:transform,font-size;
+    font-stretch:condensed;
+  }
+  #root.inv #word{color:#000;}
+  #phrase-label{
+    position:absolute;bottom:48px;left:50%;transform:translateX(-50%);
+    font-family:Arial,sans-serif;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:#444;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    max-width:80%;text-align:center;
+    transition:color .2s;
+  }
+  #root.inv #phrase-label{color:#aaa;}
+  #root.brat #phrase-label{color:#5a8a00;}
+  #font-tag{
+    position:absolute;top:12px;right:14px;
+    font-family:"Courier New",monospace;font-size:10px;
+    color:#555;letter-spacing:.06em;
+    pointer-events:none;
+  }
+  #root.inv #font-tag{color:#bbb;}
+  #root.brat #font-tag{color:#5a8a00;}
+  .controls-bar{
+    width:100%;display:flex;align-items:center;gap:12px;
+    padding:12px 16px 4px;
+    flex-wrap:wrap;
+  }
+  .controls-bar label{
+    font-size:12px;color:var(--color-text-secondary);
+    white-space:nowrap;
+  }
+  .controls-bar input[type=range]{flex:1;min-width:80px;}
+  .controls-bar button{
+    font-size:12px;padding:4px 12px;cursor:pointer;
+    border-radius:var(--border-radius-md);
+    border:0.5px solid var(--color-border-secondary);
+    background:transparent;color:var(--color-text-primary);
+  }
+  .controls-bar button:hover{background:var(--color-background-secondary);}
+  #speed-out{font-size:12px;color:var(--color-text-secondary);min-width:32px;}
+  textarea{
+    width:100%;height:80px;resize:vertical;
+    font-size:13px;font-family:var(--font-mono);
+    border:0.5px solid var(--color-border-tertiary);
+    border-radius:var(--border-radius-md);
+    padding:8px;background:var(--color-background-secondary);
+    color:var(--color-text-primary);
+    margin-top:8px;
+  }
+  .section-label{
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--color-text-secondary);margin:8px 0 2px;
+  }
+  #wrap{padding:8px 0;}
+</style>
+
+<div id="wrap">
+  <div id="root" title="click to flash">
+    <div id="word">ready</div>
+    <div id="phrase-label">click start</div>
+    <div id="font-tag">arial narrow</div>
+  </div>
+
+  <div class="controls-bar">
+    <label>reading speed</label>
+    <input type="range" id="speed" min="120" max="600" value="260" step="10">
+    <span id="speed-out">260 wpm</span>
+    <button id="toggle">▶ start</button>
+    <button id="btn-inv">invert</button>
+    <button id="btn-brat">brat</button>
+    <button id="btn-lock">lock font</button>
+  </div>
+
+  <p class="section-label">custom text (words strobed one by one)</p>
+  <textarea id="custom-text" placeholder="type or paste text here…">i refuse to be defined. sometimes i'm a transparent iridescent creature. sometimes rory gilmore coffee mystery. sometimes vampire black red gucci 3am. sometimes lana del rey americana delusion. sometimes the collapse of western civilization. you can't miss me. my aura is beyond your comprehension.</textarea>
+  <button id="btn-load" style="margin-top:6px;font-size:12px;padding:4px 14px;cursor:pointer;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary);">load text ↑</button>
+</div>
+
+<script>
+const DEFAULT_TEXT = document.getElementById('custom-text').value;
+
+// pool of "cool" tight bold sans — same energy as arial narrow bold
+const FONT_POOL = [
+  {name:'arial narrow',     css:'"Arial Narrow", Arial, sans-serif', weight:900, stretch:'condensed', spacing:'-.04em'},
+  {name:'helvetica cond',   css:'"Helvetica Neue Condensed Bold","Helvetica Neue",Helvetica,sans-serif', weight:800, stretch:'condensed', spacing:'-.03em'},
+  {name:'impact',           css:'Impact, "Haettenschweiler", sans-serif', weight:400, stretch:'normal', spacing:'-.02em'},
+  {name:'haettenschweiler', css:'"Haettenschweiler", Impact, sans-serif', weight:400, stretch:'normal', spacing:'-.03em'},
+  {name:'avenir cond',      css:'"Avenir Next Condensed", "Avenir Next", sans-serif', weight:800, stretch:'condensed', spacing:'-.02em'},
+  {name:'futura cond',      css:'"Futura Condensed", "Futura", sans-serif', weight:800, stretch:'condensed', spacing:'-.02em'},
+  {name:'bebas neue',       css:'"Bebas Neue", Impact, sans-serif', weight:400, stretch:'normal', spacing:'.01em'},
+  {name:'anton',            css:'"Anton", Impact, sans-serif', weight:400, stretch:'normal', spacing:'0'},
+  {name:'oswald',           css:'"Oswald", sans-serif', weight:700, stretch:'normal', spacing:'-.01em'},
+  {name:'archivo narrow',   css:'"Archivo Narrow", "Arial Narrow", sans-serif', weight:700, stretch:'normal', spacing:'-.02em'},
+  {name:'barlow cond',      css:'"Barlow Condensed", sans-serif', weight:900, stretch:'normal', spacing:'-.02em'},
+  {name:'fjalla one',       css:'"Fjalla One", sans-serif', weight:400, stretch:'normal', spacing:'-.01em'},
+  {name:'six caps',         css:'"Six Caps", "Bebas Neue", sans-serif', weight:400, stretch:'normal', spacing:'.02em'},
+  {name:'teko',             css:'"Teko", sans-serif', weight:700, stretch:'normal', spacing:'-.01em'},
+  {name:'saira cond',       css:'"Saira Condensed", sans-serif', weight:900, stretch:'normal', spacing:'-.03em'},
+  {name:'arial black',      css:'"Arial Black", "Helvetica Neue", sans-serif', weight:900, stretch:'condensed', spacing:'-.04em'},
+];
+
+function tokenize(text){
+  return text.split(/\s+/).filter(w=>w.length>0);
+}
+
+function displayWord(token){
+  return token.replace(/[.!?,;:]+$/,'');
+}
+
+let words = tokenize(DEFAULT_TEXT);
+let idx = 0;
+let wpm = 260;
+let timer = null;
+let running = false;
+let lockFont = false;
+let lastFontIdx = -1;
+
+function durationFor(word){
+  const base = 60000 / wpm;
+  const lenFactor = Math.min(1.8, 0.55 + word.length * 0.09);
+  const punctBoost = /[,;:]$/.test(word) ? 1.25 : /[.!?]$/.test(word) ? 1.6 : 1;
+  return Math.round(base * lenFactor * punctBoost);
+}
+
+const root = document.getElementById('root');
+const wordEl = document.getElementById('word');
+const label = document.getElementById('phrase-label');
+const fontTag = document.getElementById('font-tag');
+const toggle = document.getElementById('toggle');
+const speedEl = document.getElementById('speed');
+const speedOut = document.getElementById('speed-out');
+const btnInv = document.getElementById('btn-inv');
+const btnBrat = document.getElementById('btn-brat');
+const btnLock = document.getElementById('btn-lock');
+const btnLoad = document.getElementById('btn-load');
+const customText = document.getElementById('custom-text');
+
+function pickFont(){
+  if(lockFont) return FONT_POOL[0];
+  let n;
+  do { n = Math.floor(Math.random()*FONT_POOL.length); } while(n===lastFontIdx && FONT_POOL.length>1);
+  lastFontIdx = n;
+  return FONT_POOL[n];
+}
+
+function applyFont(f){
+  wordEl.style.fontFamily = f.css;
+  wordEl.style.fontWeight = f.weight;
+  wordEl.style.fontStretch = f.stretch;
+  wordEl.style.letterSpacing = f.spacing;
+  fontTag.textContent = f.name;
+}
+
+function fitWord(w){
+  wordEl.textContent = w;
+  const maxW = root.clientWidth - 48;
+  const maxH = root.clientHeight * 0.7;
+  let lo=10, hi=260, best=10;
+  for(let n=0;n<18;n++){
+    const mid=(lo+hi)/2;
+    wordEl.style.fontSize=mid+'px';
+    if(wordEl.scrollWidth<=maxW && wordEl.scrollHeight<=maxH){best=mid;lo=mid;}
+    else{hi=mid;}
+  }
+  wordEl.style.fontSize=Math.floor(best)+'px';
+}
+
+function jitter(){
+  const tx=(Math.random()*10-5).toFixed(2);
+  const ty=(Math.random()*8-4).toFixed(2);
+  const rot=(Math.random()*1.2-.6).toFixed(2);
+  const sc=(0.95+Math.random()*.08).toFixed(3);
+  wordEl.style.transform=`translate(${tx}px,${ty}px) rotate(${rot}deg) scale(${sc})`;
+}
+
+function tick(){
+  if(!words.length)return;
+  const token=words[idx%words.length];
+  const w=displayWord(token);
+  applyFont(pickFont());
+  fitWord(w);
+  jitter();
+
+  // strobe bg unless brat is locked on
+  if(!root.classList.contains('brat')){
+    if(Math.random()<0.45) root.classList.toggle('inv');
+    if(Math.random()<0.18){
+      setTimeout(()=>{ root.classList.toggle('inv'); jitter(); }, 40+Math.random()*70);
+    }
+  } else {
+    // tiny mid-word kick even in brat mode
+    if(Math.random()<0.22){
+      setTimeout(()=>jitter(), 40+Math.random()*60);
+    }
+  }
+
+  label.textContent = w;
+  idx++;
+
+  if(running){
+    timer=setTimeout(tick, durationFor(token));
+  }
+}
+
+function startStop(){
+  if(running){
+    clearTimeout(timer);timer=null;running=false;
+    toggle.textContent='▶ start';
+    wordEl.style.transform='none';
+    fitWord('paused');
+    label.textContent='paused';
+  } else {
+    running=true;
+    toggle.textContent='⏸ pause';
+    if(idx===0){ applyFont(FONT_POOL[0]); fitWord(displayWord(words[0])); }
+    tick();
+  }
+}
+
+speedEl.addEventListener('input',()=>{
+  wpm=+speedEl.value;
+  speedOut.textContent=wpm+' wpm';
+});
+
+toggle.addEventListener('click', startStop);
+
+btnInv.addEventListener('click',()=>{
+  root.classList.remove('brat');
+  root.classList.toggle('inv');
+});
+
+btnBrat.addEventListener('click',()=>{
+  root.classList.remove('inv');
+  root.classList.toggle('brat');
+});
+
+btnLock.addEventListener('click',()=>{
+  lockFont = !lockFont;
+  btnLock.textContent = lockFont ? 'unlock font' : 'lock font';
+  if(lockFont) applyFont(FONT_POOL[0]);
+});
+
+root.addEventListener('click',(e)=>{
+  if(e.target===root||e.target===wordEl||e.target===label){
+    if(root.classList.contains('brat')) return;
+    root.classList.toggle('inv');
+    jitter();
+  }
+});
+
+btnLoad.addEventListener('click',()=>{
+  const raw=customText.value.trim();
+  if(!raw)return;
+  words=tokenize(raw);
+  idx=0;
+  if(running){clearTimeout(timer);tick();}
+  else{const first=displayWord(words[0]);applyFont(FONT_POOL[0]);fitWord(first);label.textContent=first;}
+});
+
+window.addEventListener('keydown',(e)=>{
+  if(e.target===customText)return;
+  if(e.code==='Space'){e.preventDefault();startStop();}
+  else if(e.code==='ArrowUp'){
+    wpm=Math.min(600,wpm+20);
+    speedEl.value=wpm;speedOut.textContent=wpm+' wpm';
+  } else if(e.code==='ArrowDown'){
+    wpm=Math.max(120,wpm-20);
+    speedEl.value=wpm;speedOut.textContent=wpm+' wpm';
+  }
+});
+
+applyFont(FONT_POOL[0]);
+fitWord('ready');
+</script>

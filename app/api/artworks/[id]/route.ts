@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { updateArtwork, deleteArtwork } from "@/lib/store";
+import { toCategory } from "@/lib/types";
+import { parseCrop } from "@/lib/crop";
+import { isImageOrVideoType } from "@/lib/media";
 import { isAuthed } from "@/lib/auth";
 
 type Params = { params: Promise<{ id: string }> };
@@ -14,18 +17,31 @@ export async function PATCH(req: Request, { params }: Params) {
   const files = form
     .getAll("files")
     .filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.some((f) => !f.type.startsWith("image/"))) {
-    return NextResponse.json({ error: "All files must be images" }, { status: 400 });
+  if (files.some((f) => !isImageOrVideoType(f.type))) {
+    return NextResponse.json(
+      { error: "All files must be images or videos" },
+      { status: 400 },
+    );
   }
   const removeImages = form.getAll("removeImages").map(String);
   const str = (k: string) =>
     form.get(k) !== null ? String(form.get(k)) : undefined;
+  const fitRaw = form.get("fit");
+  const fit =
+    fitRaw === null ? undefined : fitRaw === "full" ? "full" : "square";
+  // Present-but-default parses to undefined, which we treat as "clear" (null).
+  const crop = form.get("crop") === null ? undefined : parseCrop(form.get("crop")) ?? null;
+  const category =
+    form.get("category") === null ? undefined : toCategory(form.get("category"));
 
   const updated = await updateArtwork(id, {
     title: str("title"),
     description: str("description"),
     medium: str("medium"),
     year: str("year"),
+    fit,
+    crop,
+    category,
     removeImages,
     files,
   });

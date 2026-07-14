@@ -5,11 +5,13 @@
     "description": "WARNING: EXPLICIT CONTENT (explicit in its meaning)\r\nThis film reenacts an encounter with U.S. border control, where deportation followed suspicions about artistic identity and sex work. The question “Are you a whore?” got asked after 2 border officers saw snippets of Head Over Heels. Despite its title and overall aesthetic suggesting otherwise, the action lies within the dialogue to show how language and misrecognition police hyper-femininity.",
     "medium": "Video, Installation, 00:16:31",
     "year": "2024",
+    "category": "work",
     "images": [
       "/uploads/76ed8556-d048-4f6e-83e9-b22a56a8bc12-0.png",
       "/uploads/76ed8556-d048-4f6e-83e9-b22a56a8bc12-1.jpg",
       "/uploads/76ed8556-d048-4f6e-83e9-b22a56a8bc12-2.png"
     ],
+    "fit": "square",
     "order": -1,
     "createdAt": 1782642689323
   },
@@ -19,11 +21,13 @@
     "description": "After a Bimbo-Gang™ squatted the Playboy Mansion (staged), they craved a latte. Sending NELLY out to get them, a whole chain of unexpected (real) events followed. The 'film'(?) mixes documentary footage, GTA & 3D art to capture the 21st Century Queer Bimbo Zeitgeist.",
     "medium": "Video, Installation, 00:48:31",
     "year": "2023",
+    "category": "work",
     "images": [
       "/uploads/7c6fb804-25b3-4c46-af18-92b00d04d836-0.png",
       "/uploads/7c6fb804-25b3-4c46-af18-92b00d04d836-1.jpg",
       "/uploads/7c6fb804-25b3-4c46-af18-92b00d04d836-2.png"
     ],
+    "fit": "square",
     "order": -2,
     "createdAt": 1782653692709
   },
@@ -33,13 +37,99 @@
     "description": "LOCKED IN & TAPPED OUT came about after working as an escape-room game master and participating in the Dutch pilot of the reality competition The Genius. Mixing live action and 3D animation, the work takes the form of a fictional escape-room game show set inside a 3D model of NELLY DANSEN. The project explores Bimbofatigue™: the moment a persona becomes a character you can no longer log out of. Can you escape a version of yourself that you performed into existence?\r\n\r\nCAN YOU?\r\nWILL YOU?\r\nDO YOU EVEN WANT TO?",
     "medium": "Video, Installation, TBA",
     "year": "2026",
+    "category": "work",
     "images": [
       "/uploads/2b9ce524-3059-4445-9ce5-71f130720428-0.png",
       "/uploads/2b9ce524-3059-4445-9ce5-71f130720428-1.png",
       "/uploads/2b9ce524-3059-4445-9ce5-71f130720428-2.png",
       "/uploads/2b9ce524-3059-4445-9ce5-71f130720428-3.jpg"
     ],
+    "fit": "square",
+    "crop": {
+      "scale": 1,
+      "x": 0.0981012658227848,
+      "y": 0
+    },
     "order": -3,
     "createdAt": 1782654319554
+  },
+  {
+    "id": "726e6ad6-16b8-4f40-b466-88bd5dea9f91",
+    "title": "LOVE IN THE DIGITAL AGE",
+    "description": "Full Video https://vimeo.com/530972423?fl=tl&fe=ec",
+    "medium": "Video, Installation, 00:04:01",
+    "year": "2021",
+    "category": "work",
+    "images": [
+      "/uploads/726e6ad6-16b8-4f40-b466-88bd5dea9f91-0.jpg"
+    ],
+    "fit": "square",
+    "order": -4,
+    "createdAt": 1784045741989
+  },
+  {
+    "id": "b4fa67fb-c607-4a52-88e3-2ccc3e4b150a",
+    "title": "SMILE YOUR ON CAMERA",
+    "description": "Info https://www.trespassing.nl/events/smile-you-re-on-camera",
+    "medium": "Performance, Installation",
+    "year": "2025",
+    "category": "work",
+    "images": [
+      "/uploads/b4fa67fb-c607-4a52-88e3-2ccc3e4b150a-0.png",
+      "/uploads/b4fa67fb-c607-4a52-88e3-2ccc3e4b150a-1.jpg"
+    ],
+    "fit": "square",
+    "order": -5,
+    "createdAt": 1784045801913
+  },
+  {
+    "id": "a486f852-250f-4432-a9b7-e16dd48bd455",
+    "title": "PROJECT XXX",
+    "description": "Project XXX is shot during my 27th birthday that turned into a performative film experiment where\r\nnelly-lookalikes, detectives and a news-crew went on the hunt for the REAL Nelly. The film reflects\r\non self-commodification, in a culture obsessed with ego & visibility.\r\n\r\nIf we are all NELLY DANSEN… no one is…",
+    "medium": "Video, Installation, 00:27:00",
+    "year": "2026",
+    "category": "work",
+    "images": [
+      "/uploads/a486f852-250f-4432-a9b7-e16dd48bd455-0.png",
+      "/uploads/a486f852-250f-4432-a9b7-e16dd48bd455-1.jpg",
+      "/uploads/a486f852-250f-4432-a9b7-e16dd48bd455-2.jpg",
+      "/uploads/a486f852-250f-4432-a9b7-e16dd48bd455-3.jpg"
+    ],
+    "fit": "square",
+    "order": -6,
+    "createdAt": 1784045875634
+  },
+  {
+    "id": "afec62ac-b5b4-4ff2-af0e-f70548249c3c",
+    "title": "Untitled",
+    "description": "",
+    "medium": "",
+    "year": "",
+    "category": "paparazzi",
+    "images": [
+      "/uploads/afec62ac-b5b4-4ff2-af0e-f70548249c3c-0.png",
+      "/uploads/afec62ac-b5b4-4ff2-af0e-f70548249c3c-1.jpg",
+      "/uploads/afec62ac-b5b4-4ff2-af0e-f70548249c3c-2.jpg",
+      "/uploads/afec62ac-b5b4-4ff2-af0e-f70548249c3c-3.png"
+    ],
+    "fit": "square",
+    "order": -7,
+    "createdAt": 1784046251658
+  },
+  {
+    "id": "fa9b980e-6660-42cd-bc97-4e8a638360df",
+    "title": "Untitled",
+    "description": "",
+    "medium": "",
+    "year": "",
+    "category": "paparazzi",
+    "images": [
+      "/uploads/fa9b980e-6660-42cd-bc97-4e8a638360df-0.mp4",
+      "/uploads/fa9b980e-6660-42cd-bc97-4e8a638360df-1.mp4",
+      "/uploads/fa9b980e-6660-42cd-bc97-4e8a638360df-2.mp4"
+    ],
+    "fit": "square",
+    "order": -8,
+    "createdAt": 1784046705814
   }
 ]

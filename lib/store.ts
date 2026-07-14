@@ -1,7 +1,9 @@
 import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
-import type { Artwork } from "./types";
+import type { Artwork, Category, Crop } from "./types";
+import { toCategory } from "./types";
+import { parseCrop } from "./crop";
 
 /**
  * Local, filesystem-backed store. Metadata lives in data/artworks.json and
@@ -39,7 +41,10 @@ function normalize(item: Artwork & { image?: string }): Artwork {
     description: item.description,
     medium: item.medium,
     year: item.year,
+    category: toCategory(item.category),
     images,
+    fit: item.fit === "full" ? "full" : "square",
+    crop: parseCrop(item.crop),
     order: item.order,
     createdAt: item.createdAt,
   };
@@ -50,9 +55,11 @@ async function writeAll(items: Artwork[]): Promise<void> {
   await fs.writeFile(DATA_FILE, JSON.stringify(items, null, 2));
 }
 
-export async function getArtworks(): Promise<Artwork[]> {
+export async function getArtworks(category?: Category): Promise<Artwork[]> {
   const items = await readAll();
-  return items.sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
+  return items
+    .filter((a) => (category ? a.category === category : true))
+    .sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
 }
 
 export async function getArtwork(id: string): Promise<Artwork | undefined> {
@@ -65,6 +72,9 @@ export async function addArtwork(input: {
   description: string;
   medium: string;
   year: string;
+  fit?: "square" | "full";
+  crop?: Crop;
+  category?: Category;
   files: File[];
 }): Promise<Artwork> {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
@@ -88,7 +98,10 @@ export async function addArtwork(input: {
     description: input.description.trim(),
     medium: input.medium.trim(),
     year: input.year.trim(),
+    category: toCategory(input.category),
     images,
+    fit: input.fit === "full" ? "full" : "square",
+    crop: input.fit === "full" ? undefined : parseCrop(input.crop),
     order: minOrder - 1, // newest shows first by default
     createdAt: Date.now(),
   };
@@ -105,6 +118,10 @@ export async function updateArtwork(
     description?: string;
     medium?: string;
     year?: string;
+    fit?: "square" | "full";
+    /** `null` clears the crop back to a plain centered square; undefined leaves it. */
+    crop?: Crop | null;
+    category?: Category;
     order?: number;
     /** Existing image paths to drop from this project. */
     removeImages?: string[];
@@ -142,6 +159,15 @@ export async function updateArtwork(
     }
   }
 
+  const fit = input.fit ?? current.fit;
+  // A plain (non-square) thumbnail can't be reframed, so drop any crop there.
+  const crop =
+    fit === "full"
+      ? undefined
+      : input.crop !== undefined
+        ? input.crop ?? undefined
+        : current.crop;
+
   const next: Artwork = {
     ...current,
     title: input.title !== undefined ? input.title.trim() || "Untitled" : current.title,
@@ -149,12 +175,31 @@ export async function updateArtwork(
       input.description !== undefined ? input.description.trim() : current.description,
     medium: input.medium !== undefined ? input.medium.trim() : current.medium,
     year: input.year !== undefined ? input.year.trim() : current.year,
+    fit,
+    crop,
+    category: input.category ?? current.category,
     order: input.order ?? current.order,
     images,
   };
   items[idx] = next;
   await writeAll(items);
   return next;
+}
+
+/**
+ * Persist a new project order. `orderedIds` is the desired sequence (typically
+ * one gallery's projects, top to bottom); each listed project's `order` is set
+ * to its index. Projects not in the list keep their current order — since
+ * `getArtworks` sorts within a filtered category, that's safe across galleries.
+ */
+export async function reorderArtworks(orderedIds: string[]): Promise<void> {
+  const items = await readAll();
+  const rank = new Map(orderedIds.map((id, i) => [id, i]));
+  for (const item of items) {
+    const r = rank.get(item.id);
+    if (r !== undefined) item.order = r;
+  }
+  await writeAll(items);
 }
 
 export async function deleteArtwork(id: string): Promise<boolean> {

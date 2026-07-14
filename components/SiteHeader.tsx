@@ -45,6 +45,9 @@ export default function SiteHeader({
         <Link href="/work" className={ITEM}>
           WORK
         </Link>
+        <Link href="/paparazzi" className={ITEM}>
+          PAPARAZZI
+        </Link>
         {navBtn("contact", "CONTACT")}
       </nav>
     </header>

@@ -29,6 +29,16 @@ export default function Desktop({ instagram }: { instagram: IgFeed }) {
         </>
       )}
 
+      {/* Site-wide "under construction" notice while the site is being finished.
+          Sits above the desktop but below the windows/header, and ignores
+          pointer events so it never blocks anything. Delete when finished. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/under-construction.png"
+        alt="This page is under construction"
+        className="pointer-events-none absolute bottom-12 left-4 z-40 w-72 max-w-[80vw] -rotate-3 select-none drop-shadow-lg"
+      />
+
       <Marquee text={site.marquee} logo={site.marqueeLogo} />
     </DesktopShell>
   );

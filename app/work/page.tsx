@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function WorkPage() {
   const [artworks, instagram] = await Promise.all([
-    getArtworks(),
+    getArtworks("work"),
     getInstagramFeed(),
   ]);
   return <WorkGallery artworks={artworks} instagram={instagram} />;

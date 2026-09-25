@@ -21,9 +21,14 @@ export default function LoginForm() {
     setLoading(false);
     if (res.ok) {
       router.refresh();
-    } else {
-      setError("That password didn't work. Try again.");
+      return;
     }
+    // Use the server's message: it distinguishes a wrong password from being
+    // rate limited or the admin password not being configured at all.
+    const { error: message } = await res
+      .json()
+      .catch(() => ({ error: "" }));
+    setError(message || "That password didn't work. Try again.");
   }
 
   return (

@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { Artwork, Category, Crop } from "@/lib/types";
 import { CATEGORIES } from "@/lib/types";
 import { cropTransform, DEFAULT_CROP } from "@/lib/crop";
-import { isVideo } from "@/lib/media";
+import { isVideo, isTooLarge, tooLargeMessage } from "@/lib/media";
 import SquareCropper from "@/components/SquareCropper";
 
 const INPUT =
@@ -19,12 +19,21 @@ const INPUT =
  */
 function usePickedImages() {
   const [picked, setPicked] = useState<{ file: File; url: string }[]>([]);
+  // Files rejected at pick time (too big). Surfaced next to the picker so the
+  // problem is obvious before anything is uploaded.
+  const [rejected, setRejected] = useState("");
 
   function addFiles(list: FileList | null) {
     if (!list) return;
+    const all = Array.from(list);
+    // Catch oversized files here rather than after a long upload that fails.
+    const tooBig = all.filter((f) => isTooLarge(f.size));
+    setRejected(tooBig.length ? tooLargeMessage(tooBig.map((f) => f.name)) : "");
+    const usable = all.filter((f) => !isTooLarge(f.size));
+
     setPicked((prev) => {
       const next = [...prev];
-      for (const file of Array.from(list)) {
+      for (const file of usable) {
         const dup = next.some(
           (p) => p.file.name === file.name && p.file.size === file.size,
         );
@@ -42,13 +51,14 @@ function usePickedImages() {
   }
 
   function clearFiles() {
+    setRejected("");
     setPicked((prev) => {
       prev.forEach((p) => URL.revokeObjectURL(p.url));
       return [];
     });
   }
 
-  return { picked, addFiles, removeFile, clearFiles };
+  return { picked, addFiles, removeFile, clearFiles, rejected };
 }
 
 type Picker = ReturnType<typeof usePickedImages>;
@@ -63,7 +73,7 @@ function NewImagesField({
   hint: string;
   coverBadge?: boolean;
 }) {
-  const { picked, addFiles, removeFile, clearFiles } = picker;
+  const { picked, addFiles, removeFile, clearFiles, rejected } = picker;
   return (
     <>
       <input
@@ -78,6 +88,11 @@ function NewImagesField({
         className="text-sm file:mr-4 file:rounded-md file:border-0 file:bg-foreground file:px-4 file:py-2 file:text-background"
       />
       <span className="text-xs text-muted">{hint}</span>
+      {rejected && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {rejected}
+        </p>
+      )}
       {picked.length > 0 && (
         <div className="mt-1">
           <div className="flex items-center justify-between">
@@ -302,7 +317,7 @@ export default function AdminDashboard({ initial }: { initial: Artwork[] }) {
             <NewImagesField
               picker={picker}
               coverBadge
-              hint="Click as many times as you like — selections add up, including from different folders. Images and videos are both fine; the first file is the cover."
+              hint="Click as many times as you like — selections add up, including from different folders. Images and videos are both fine; the first file is the cover. Max 50 MB per file."
             />
           </label>
           {/* Paparazzi is content-only — no title/year/medium/description. */}
@@ -622,7 +637,7 @@ function EditRow({
           <span className="text-sm text-muted">Add more media</span>
           <NewImagesField
             picker={picker}
-            hint="New images or videos are appended to this project."
+            hint="New images or videos are appended to this project. Max 50 MB per file."
           />
         </label>
 

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { updateArtwork, deleteArtwork } from "@/lib/store";
 import { toCategory } from "@/lib/types";
 import { parseCrop } from "@/lib/crop";
-import { isImageOrVideoType } from "@/lib/media";
+import { isImageOrVideoType, isTooLarge, tooLargeMessage } from "@/lib/media";
 import { isAuthed } from "@/lib/auth";
+import { storageErrorMessage } from "@/lib/errors";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -23,6 +24,14 @@ export async function PATCH(req: Request, { params }: Params) {
       { status: 400 },
     );
   }
+  // Same up-front size check as the create route — see the note there.
+  const oversized = files.filter((f) => isTooLarge(f.size));
+  if (oversized.length) {
+    return NextResponse.json(
+      { error: tooLargeMessage(oversized.map((f) => f.name)) },
+      { status: 413 },
+    );
+  }
   const removeImages = form.getAll("removeImages").map(String);
   const str = (k: string) =>
     form.get(k) !== null ? String(form.get(k)) : undefined;
@@ -34,21 +43,25 @@ export async function PATCH(req: Request, { params }: Params) {
   const category =
     form.get("category") === null ? undefined : toCategory(form.get("category"));
 
-  const updated = await updateArtwork(id, {
-    title: str("title"),
-    description: str("description"),
-    medium: str("medium"),
-    year: str("year"),
-    fit,
-    crop,
-    category,
-    removeImages,
-    files,
-  });
-  if (!updated) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    const updated = await updateArtwork(id, {
+      title: str("title"),
+      description: str("description"),
+      medium: str("medium"),
+      year: str("year"),
+      fit,
+      crop,
+      category,
+      removeImages,
+      files,
+    });
+    if (!updated) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json(updated);
+  } catch (err) {
+    return NextResponse.json({ error: storageErrorMessage(err) }, { status: 500 });
   }
-  return NextResponse.json(updated);
 }
 
 export async function DELETE(_req: Request, { params }: Params) {

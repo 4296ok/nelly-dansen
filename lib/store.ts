@@ -1,70 +1,84 @@
-import { promises as fs } from "fs";
-import path from "path";
 import crypto from "crypto";
 import type { Artwork, Category, Crop } from "./types";
 import { toCategory } from "./types";
 import { parseCrop } from "./crop";
+import { supabase, BUCKET, TABLE, publicUrlFor, bucketPathFromUrl } from "./supabase";
 
 /**
- * Local, filesystem-backed store. Metadata lives in data/artworks.json and
- * images live in public/uploads. This is perfect for developing locally.
+ * Supabase-backed store. Metadata lives in the `artworks` table; images and
+ * videos live in the `artworks` storage bucket. This replaced the original
+ * filesystem-backed version (data/artworks.json + public/uploads/) because
+ * Vercel's production filesystem is read-only, so uploads never persisted
+ * there.
  *
- * NOTE: Vercel's filesystem is read-only in production, so when you go live
- * you'll swap these functions for Supabase (database + storage). The rest of
- * the app only calls the functions below, so that swap stays contained here.
+ * The rest of the app only calls the functions below — no page, component,
+ * or API route needed to change for this swap.
  */
 
-const DATA_FILE = path.join(process.cwd(), "data", "artworks.json");
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+// Raw row shape as it comes back from Postgres, before we normalize it.
+type Row = {
+  id: string;
+  title: string;
+  description: string;
+  medium: string;
+  year: string;
+  category: string;
+  images: string[];
+  fit: string;
+  crop: unknown;
+  order: number;
+  created_at: number;
+};
 
-async function readAll(): Promise<Artwork[]> {
-  try {
-    const raw = await fs.readFile(DATA_FILE, "utf8");
-    const items = JSON.parse(raw) as (Artwork & { image?: string })[];
-    return items.map(normalize);
-  } catch {
-    return [];
-  }
-}
-
-// Tolerate older records that stored a single `image` instead of `images[]`.
-function normalize(item: Artwork & { image?: string }): Artwork {
-  const images =
-    item.images && item.images.length
-      ? item.images
-      : item.image
-        ? [item.image]
-        : [];
+function normalize(row: Row): Artwork {
   return {
-    id: item.id,
-    title: item.title,
-    description: item.description,
-    medium: item.medium,
-    year: item.year,
-    category: toCategory(item.category),
-    images,
-    fit: item.fit === "full" ? "full" : "square",
-    crop: parseCrop(item.crop),
-    order: item.order,
-    createdAt: item.createdAt,
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    medium: row.medium,
+    year: row.year,
+    category: toCategory(row.category),
+    images: row.images ?? [],
+    fit: row.fit === "full" ? "full" : "square",
+    crop: parseCrop(row.crop),
+    order: row.order,
+    createdAt: Number(row.created_at),
   };
 }
 
-async function writeAll(items: Artwork[]): Promise<void> {
-  await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-  await fs.writeFile(DATA_FILE, JSON.stringify(items, null, 2));
-}
-
 export async function getArtworks(category?: Category): Promise<Artwork[]> {
-  const items = await readAll();
-  return items
-    .filter((a) => (category ? a.category === category : true))
-    .sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
+  let query = supabase
+    .from(TABLE)
+    .select("*")
+    .order("order", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (category) query = query.eq("category", category);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data as Row[]).map(normalize);
 }
 
 export async function getArtwork(id: string): Promise<Artwork | undefined> {
-  const items = await readAll();
-  return items.find((a) => a.id === id);
+  const { data, error } = await supabase.from(TABLE).select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? normalize(data as Row) : undefined;
+}
+
+async function uploadFiles(id: string, files: File[], stamp: string): Promise<string[]> {
+  const images: string[] = [];
+  for (const [i, file] of files.entries()) {
+    const ext = extFromName(file.name) || ".jpg";
+    const path = `${id}/${stamp}-${i}${ext}`;
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, bytes, { contentType: file.type || undefined, upsert: false });
+    if (error) throw error;
+    images.push(publicUrlFor(path));
+  }
+  return images;
 }
 
 export async function addArtwork(input: {
@@ -77,22 +91,19 @@ export async function addArtwork(input: {
   category?: Category;
   files: File[];
 }): Promise<Artwork> {
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-
   const id = crypto.randomUUID();
-  const images: string[] = [];
-  for (const [i, file] of input.files.entries()) {
-    const ext = extFromName(file.name) || ".jpg";
-    const filename = `${id}-${i}${ext}`;
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(path.join(UPLOAD_DIR, filename), bytes);
-    images.push(`/uploads/${filename}`);
-  }
+  const images = await uploadFiles(id, input.files, "0");
 
-  const items = await readAll();
-  const minOrder = items.reduce((m, a) => Math.min(m, a.order), 0);
+  // New work goes to the top: one lower than the current minimum order.
+  const { data: minRow } = await supabase
+    .from(TABLE)
+    .select("order")
+    .order("order", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const minOrder = minRow ? (minRow as { order: number }).order : 0;
 
-  const artwork: Artwork = {
+  const row: Row = {
     id,
     title: input.title.trim() || "Untitled",
     description: input.description.trim(),
@@ -101,14 +112,14 @@ export async function addArtwork(input: {
     category: toCategory(input.category),
     images,
     fit: input.fit === "full" ? "full" : "square",
-    crop: input.fit === "full" ? undefined : parseCrop(input.crop),
-    order: minOrder - 1, // newest shows first by default
-    createdAt: Date.now(),
+    crop: input.fit === "full" ? null : parseCrop(input.crop) ?? null,
+    order: minOrder - 1,
+    created_at: Date.now(),
   };
 
-  items.push(artwork);
-  await writeAll(items);
-  return artwork;
+  const { error } = await supabase.from(TABLE).insert(row);
+  if (error) throw error;
+  return normalize(row);
 }
 
 export async function updateArtwork(
@@ -123,37 +134,36 @@ export async function updateArtwork(
     crop?: Crop | null;
     category?: Category;
     order?: number;
-    /** Existing image paths to drop from this project. */
+    /** Existing image URLs to drop from this project. */
     removeImages?: string[];
     /** New image files to append to this project. */
     files?: File[];
   }
 ): Promise<Artwork | undefined> {
-  const items = await readAll();
-  const idx = items.findIndex((a) => a.id === id);
-  if (idx === -1) return undefined;
-  const current = items[idx];
+  const { data: currentRow, error: fetchError } = await supabase
+    .from(TABLE)
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!currentRow) return undefined;
+  const current = normalize(currentRow as Row);
 
   // Start from the images we're keeping, then append any new uploads.
   const remove = new Set(input.removeImages ?? []);
-  const images = current.images.filter((img) => !remove.has(img));
+  let images = current.images.filter((img) => !remove.has(img));
 
   if (input.files?.length) {
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    const stamp = Date.now();
-    for (const [i, file] of input.files.entries()) {
-      const ext = extFromName(file.name) || ".jpg";
-      const filename = `${id}-${stamp}-${i}${ext}`;
-      const bytes = Buffer.from(await file.arrayBuffer());
-      await fs.writeFile(path.join(UPLOAD_DIR, filename), bytes);
-      images.push(`/uploads/${filename}`);
-    }
+    const uploaded = await uploadFiles(id, input.files, String(Date.now()));
+    images = images.concat(uploaded);
   }
 
-  // Best-effort delete of the dropped image files.
+  // Best-effort delete of the dropped files from storage.
   for (const img of remove) {
+    const path = bucketPathFromUrl(img);
+    if (!path) continue;
     try {
-      await fs.unlink(path.join(UPLOAD_DIR, img.replace(/^\/uploads\//, "")));
+      await supabase.storage.from(BUCKET).remove([path]);
     } catch {
       // ignore missing file
     }
@@ -168,22 +178,24 @@ export async function updateArtwork(
         ? input.crop ?? undefined
         : current.crop;
 
-  const next: Artwork = {
-    ...current,
+  const next: Row = {
+    id: current.id,
     title: input.title !== undefined ? input.title.trim() || "Untitled" : current.title,
     description:
       input.description !== undefined ? input.description.trim() : current.description,
     medium: input.medium !== undefined ? input.medium.trim() : current.medium,
     year: input.year !== undefined ? input.year.trim() : current.year,
-    fit,
-    crop,
     category: input.category ?? current.category,
-    order: input.order ?? current.order,
     images,
+    fit,
+    crop: crop ?? null,
+    order: input.order ?? current.order,
+    created_at: current.createdAt,
   };
-  items[idx] = next;
-  await writeAll(items);
-  return next;
+
+  const { error } = await supabase.from(TABLE).update(next).eq("id", id);
+  if (error) throw error;
+  return normalize(next);
 }
 
 /**
@@ -193,31 +205,36 @@ export async function updateArtwork(
  * `getArtworks` sorts within a filtered category, that's safe across galleries.
  */
 export async function reorderArtworks(orderedIds: string[]): Promise<void> {
-  const items = await readAll();
-  const rank = new Map(orderedIds.map((id, i) => [id, i]));
-  for (const item of items) {
-    const r = rank.get(item.id);
-    if (r !== undefined) item.order = r;
-  }
-  await writeAll(items);
+  // One update per row. The dataset is a portfolio (tens of pieces, not
+  // thousands), so this is simpler and safer than a bulk upsert, which would
+  // need every NOT NULL column supplied to satisfy Postgres's insert path.
+  await Promise.all(
+    orderedIds.map((id, i) => supabase.from(TABLE).update({ order: i }).eq("id", id))
+  );
 }
 
 export async function deleteArtwork(id: string): Promise<boolean> {
-  const items = await readAll();
-  const target = items.find((a) => a.id === id);
-  if (!target) return false;
+  const { data: row, error: fetchError } = await supabase
+    .from(TABLE)
+    .select("images")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!row) return false;
 
-  // Best-effort remove of every image file for this project.
-  for (const image of target.images) {
+  const paths = ((row as { images: string[] }).images ?? [])
+    .map(bucketPathFromUrl)
+    .filter((p): p is string => Boolean(p));
+  if (paths.length) {
     try {
-      const filename = image.replace(/^\/uploads\//, "");
-      await fs.unlink(path.join(UPLOAD_DIR, filename));
+      await supabase.storage.from(BUCKET).remove(paths);
     } catch {
-      // ignore missing file
+      // ignore missing files
     }
   }
 
-  await writeAll(items.filter((a) => a.id !== id));
+  const { error } = await supabase.from(TABLE).delete().eq("id", id);
+  if (error) throw error;
   return true;
 }
 

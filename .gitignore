@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the template with no secrets in it is meant to be committed.
+!.env.local.example
 
 # vercel
 .vercel
@@ -43,7 +45,13 @@ next-env.d.ts
 # Raw source files (2 GB of videos/stills) — not part of the deployed web app
 /WORK/
 
-# NOTE: data/artworks.json and public/uploads/* ARE committed for now so the
-# preview deploy shows the current work. They move to Supabase for the real
-# launch (Vercel's filesystem is read-only, so uploads there won't persist).
+# Uploaded media now lives in Supabase Storage, not here. public/uploads/ is
+# kept locally as the pre-migration copy but is no longer served or deployed —
+# tracking ~187 MB of video made every clone and deploy slow.
+/public/uploads/
+
+# data/artworks.json is still committed: the app no longer reads it (Supabase
+# does), but it's the input to scripts/migrate-to-supabase.mjs and a record of
+# what the site held before the move. It's a few KB, so it costs nothing.
+
 # .env.local stays out via the .env* rule above.
